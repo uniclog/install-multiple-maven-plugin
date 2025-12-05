@@ -39,9 +39,9 @@ public class MultipleInstallMojo extends AbstractMojo {
     private static final Pattern POM_ENTRY_PATTERN = Pattern.compile("META-INF/maven/.*/pom\\.xml");
     private static final Predicate<JarEntry> IS_POM_ENTRY = entry -> POM_ENTRY_PATTERN.matcher(entry.getName()).matches();
 
-    @Parameter(required = true)
+    @Parameter(property = "files", required = true)
     private File files;
-    @Parameter(defaultValue = "${project.build.directory}/local_repo")
+    @Parameter(property = "localRepositoryPath", defaultValue = "${project.build.directory}/local_repo")
     private File localRepositoryPath;
     @Parameter(defaultValue = "${session}", required = true, readonly = true)
     private MavenSession session;

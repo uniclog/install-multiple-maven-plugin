@@ -11,7 +11,7 @@
 
     <groupId>io.github.uniclog</groupId>
     <artifactId>install-multiple-maven-plugin</artifactId>
-    <version>1.0.3</version>
+    <version>1.0.4</version>
     <packaging>maven-plugin</packaging>
 
     <developers>

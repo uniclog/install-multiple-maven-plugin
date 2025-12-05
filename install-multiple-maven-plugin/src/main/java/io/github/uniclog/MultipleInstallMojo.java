@@ -34,7 +34,7 @@ import java.util.regex.Pattern;
 
 import static java.util.Objects.isNull;
 
-@Mojo(name = "install-multiple")
+@Mojo(name = "install-multiple", requiresProject = false)
 public class MultipleInstallMojo extends AbstractMojo {
     private static final Pattern POM_ENTRY_PATTERN = Pattern.compile("META-INF/maven/.*/pom\\.xml");
     private static final Predicate<JarEntry> IS_POM_ENTRY = entry -> POM_ENTRY_PATTERN.matcher(entry.getName()).matches();

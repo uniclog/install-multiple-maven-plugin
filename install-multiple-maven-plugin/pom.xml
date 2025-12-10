@@ -11,7 +11,7 @@
 
     <groupId>io.github.uniclog</groupId>
     <artifactId>install-multiple-maven-plugin</artifactId>
-    <version>1.0.4</version>
+    <version>1.0.12</version>
     <packaging>maven-plugin</packaging>
 
     <developers>
@@ -169,7 +169,7 @@
                         <configuration>
                             <deploymentName>im-${version}</deploymentName>
                             <publishingServerId>central</publishingServerId>
-                            <autoPublish>false</autoPublish>
+                            <autoPublish>true</autoPublish>
                         </configuration>
                     </plugin>
                     <plugin>

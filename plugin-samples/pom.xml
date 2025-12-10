@@ -23,7 +23,7 @@
             <plugin>
                 <groupId>io.github.uniclog</groupId>
                 <artifactId>install-multiple-maven-plugin</artifactId>
-                <version>0.0-SNAPSHOT</version>
+                <version>1.0.12</version>
                 <executions>
                     <execution>
                         <id>install-artifacts</id>
@@ -32,7 +32,9 @@
                             <goal>install-multiple</goal>
                         </goals>
                         <configuration>
+                            <recurcive>true</recurcive>
                             <files>${project.basedir}/local_jar_dir</files>
+                            <!--<files>${project.basedir}\local_jar_dir\local_t\1\1.5.2.7-SNAPSHOT</files>-->
                             <localRepositoryPath>${project.basedir}/local_repo/</localRepositoryPath>
                         </configuration>
                     </execution>

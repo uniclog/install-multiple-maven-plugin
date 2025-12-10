@@ -18,6 +18,7 @@ import org.eclipse.aether.artifact.DefaultArtifact;
 import org.eclipse.aether.installation.InstallRequest;
 import org.eclipse.aether.installation.InstallationException;
 import org.eclipse.aether.repository.LocalRepository;
+import org.eclipse.aether.util.artifact.SubArtifact;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -26,7 +27,6 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.Arrays;
 import java.util.function.Predicate;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -43,6 +43,8 @@ public class MultipleInstallMojo extends AbstractMojo {
     private File files;
     @Parameter(property = "localRepositoryPath", defaultValue = "${project.build.directory}/local_repo")
     private File localRepositoryPath;
+    @Parameter(property = "recurcive")
+    private Boolean recurcive = false;
     @Parameter(defaultValue = "${session}", required = true, readonly = true)
     private MavenSession session;
     @Component
@@ -50,35 +52,101 @@ public class MultipleInstallMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoExecutionException {
-        File[] jarFiles = files.listFiles((dir, name) -> name.endsWith(".jar"));
-        if (isNull(jarFiles) || jarFiles.length == 0) {
+        if (isNull(files) || !files.exists()) {
             getLog().warn("Artifacts not found");
             return;
         }
-        getLog().debug("Jars:" + Arrays.toString(jarFiles));
-        for (File file : jarFiles) {
-            installJar(file);
+        processDirectory(files);
+    }
+
+    private void processDirectory(File dir) throws MojoExecutionException {
+        File[] children = dir.listFiles((dir1, name) ->
+                name.endsWith(".jar") || name.endsWith(".zip") || name.endsWith(".pom")
+                        || dir1.isDirectory()
+        );
+        if (isNull(children)) return;
+
+        for (File file : children) {
+            if (file.isDirectory() && recurcive) {
+                processDirectory(file);
+            } else if (file.getName().endsWith(".jar")) {
+                install(file, "jar");
+            } else if (file.getName().endsWith(".zip")) {
+                install(file, "zip");
+            } else if (file.getName().endsWith(".pom")) {
+                install(file, "pom");
+            }
         }
     }
 
-    private void installJar(File file) throws MojoExecutionException {
-        File pomFilePath = readingPomFromJarFile(file);
-        if (isNull(pomFilePath)) {
-            getLog().warn("POM file not found in JAR: " + file.getAbsolutePath());
-            return;
+    private void install(File file, String packaging) throws MojoExecutionException {
+        File pomFile = file;
+        if (!packaging.equals("pom")) {
+            pomFile = findPomForArtifact(file);
+            if (isNull(pomFile)) {
+                getLog().warn("POM file not found: " + file.getAbsolutePath());
+                return;
+            }
         }
-        Model model = readModel(pomFilePath);
+
+        Model model = readModel(pomFile);
         processModel(model);
-        Artifact mainArtifact = new DefaultArtifact(
-                model.getGroupId(),
-                model.getArtifactId(),
-                "jar",
-                model.getVersion()
-        ).setFile(file);
-        InstallRequest installRequest = new InstallRequest().addArtifact(mainArtifact);
+
         var repositorySystemSession = getDefaultRepositorySystemSession();
+        InstallRequest installRequest = new InstallRequest();
+        Artifact artifact = null;
+
+        switch (packaging) {
+            case "jar": {
+                artifact = new DefaultArtifact(
+                        model.getGroupId(),
+                        model.getArtifactId(),
+                        "jar",
+                        model.getVersion()
+                ).setFile(file);
+                installRequest.addArtifact(artifact);
+                break;
+            }
+            case "zip": {
+                artifact = new DefaultArtifact(
+                        model.getGroupId(),
+                        model.getArtifactId(),
+                        "zip",
+                        model.getVersion()
+                ).setFile(file);
+                installRequest.addArtifact(artifact);
+                break;
+            }
+            case "pom": {
+                String baseName = model.getArtifactId() + "-" + model.getVersion();
+                boolean zipExists = new File(file.getParent(), baseName + ".zip").exists();
+                boolean jarExists = new File(file.getParent(), baseName + ".jar").exists();
+                if (zipExists || jarExists) {
+                    getLog().debug("Skipping POM installation (JAR or ZIP exists): " + pomFile.getName());
+                    return;
+                }
+
+                artifact = new DefaultArtifact(
+                        model.getGroupId(),
+                        model.getArtifactId(),
+                        "pom",
+                        model.getVersion()
+                ).setFile(pomFile);
+                installRequest.addArtifact(artifact);
+                break;
+            }
+        }
+        if (!packaging.equals("pom") && artifact != null) {
+            Artifact pomArtifact = new SubArtifact(artifact, "", "pom")
+                    .setFile(pomFile);
+            installRequest.addArtifact(pomArtifact);
+        }
+
         try {
-            repositorySystem.install(repositorySystemSession, installRequest);
+            if (!installRequest.getArtifacts().isEmpty()) {
+                repositorySystem.install(repositorySystemSession, installRequest);
+                getLog().debug("Installed: " + artifact);
+            }
         } catch (InstallationException e) {
             throw new MojoExecutionException(e.getMessage(), e);
         }
@@ -95,6 +163,22 @@ public class MultipleInstallMojo extends AbstractMojo {
         var localRepositoryManager = repositorySystem.newLocalRepositoryManager(repositorySystemSession, localRepository);
         repositorySystemSession.setLocalRepositoryManager(localRepositoryManager);
         return repositorySystemSession;
+    }
+
+    private File findPomForArtifact(File file) {
+        if (file.getName().endsWith(".jar")) {
+            File extracted = readingPomFromJarFile(file);
+            if (extracted != null) {
+                return extracted;
+            }
+        }
+
+        String pomName = file.getName();
+        if (pomName.contains(".")) {
+            pomName = pomName.substring(0, pomName.lastIndexOf('.'));
+        }
+        File pom = new File(file.getParent(), pomName + ".pom");
+        return pom.exists() ? pom : null;
     }
 
     private File readingPomFromJarFile(File file) {
